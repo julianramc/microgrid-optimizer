@@ -192,6 +192,8 @@ export function StepICSA({
         deltaH: DEFAULT_ECONOMIC_PARAMS.deltaH,
       } : DEFAULT_ECONOMIC_PARAMS
 
+      const exactMatlabProfile = isIEEETest ? ALL_PROFILES["zni-rural"] : profile
+
       // Ejecutar la optimización DIRECTAMENTE en el navegador
       // Esto evita el límite de tiempo de 10s de Vercel y permite ver progreso real
       const data = await runICSA(
