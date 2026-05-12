@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     // Ejecutar optimización ICSA
-    const result = runICSA(
+    const result = await runICSA(
       network,
       loadProfile,
       economics,

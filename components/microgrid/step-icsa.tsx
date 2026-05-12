@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { IEEE_33_NETWORK, IEEE_69_NETWORK, LOAD_PROFILES, DEFAULT_ECONOMIC_PARAMS, IEEE_33_LINES, IEEE_33_LOADS, IEEE_69_LINES, IEEE_69_LOADS } from "@/lib/microgrid/ieee-test-cases"
 import { ZNI_REGIONAL_PROFILES, OPERATOR_PROFILES, DATA_SOURCES } from "@/lib/microgrid/colombian-data"
-import type { NetworkData, HourlyLoadProfile, ICSAConfig, ICSAResult } from "@/lib/microgrid/icsa-types"
+import { runICSA } from "@/lib/microgrid/icsa-optimizer"
+import type { NetworkData, HourlyLoadProfile, ICSAConfig, ICSAResult, EconomicParams } from "@/lib/microgrid/icsa-types"
 import type { LoadProfile, OptimizerConfig, DecisionBounds, FinancialParams } from "@/lib/microgrid/types"
 import { ArrowLeft, ExternalLink, Database, FileText, Zap, Info, ChevronDown, ChevronUp, CheckCircle2, Download } from "lucide-react"
 import {
@@ -180,22 +181,7 @@ export function StepICSA({
     }
 
     try {
-      // Simulación de progreso más realista (empíricamente 1.2ms por individuo por iteración para IEEE 33/69)
-      const estimatedTimeMs = Math.max((maxIterations[0] * populationSize[0]) * 1.2, 5000)
-      // Ajustamos el tiempo por tick para tener ~100 actualizaciones fluidas
-      const tickRate = estimatedTimeMs / 100;
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          // Incremento suave: avanza más rápido al principio, luego decelera
-          const step = prev < 40 ? 1.5 : prev < 75 ? 1.0 : prev < 90 ? 0.5 : prev < 99 ? 0.1 : 0;
-          return Number(Math.min(prev + step, 99).toFixed(1));
-        })
-      }, tickRate)
-
-      // Cuando es prueba IEEE, se ignora el perfil de la UI y se inyecta el EXACTO de MATLAB (que corresponde a zni-rural en la base de datos local)
-      const exactMatlabProfile = isIEEETest ? ALL_PROFILES["zni-rural"] : profile
-
-      const economicsToUse = globalEconomics ? {
+      const economicsToUse: EconomicParams = globalEconomics ? {
         discountRate: globalEconomics.discountRate,
         horizonYears: globalEconomics.horizonYears,
         energyInflation: globalEconomics.inflationRate, // mapped inflationRate -> energyInflation
@@ -206,29 +192,26 @@ export function StepICSA({
         deltaH: DEFAULT_ECONOMIC_PARAMS.deltaH,
       } : DEFAULT_ECONOMIC_PARAMS
 
-      const res = await fetch("/api/icsa-optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          network,
-          loadProfile: exactMatlabProfile,
-          economics: economicsToUse,
-          config,
-        }),
-      })
-
-      clearInterval(progressInterval)
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || "Error en optimizacion")
-      }
+      // Ejecutar la optimización DIRECTAMENTE en el navegador
+      // Esto evita el límite de tiempo de 10s de Vercel y permite ver progreso real
+      const data = await runICSA(
+        network,
+        exactMatlabProfile,
+        economicsToUse,
+        config,
+        (iter, total, bestFitness) => {
+          const p = Number(((iter / total) * 100).toFixed(1))
+          setProgress(p)
+          if (iter % 250 === 0 || iter === total) {
+            addLog(`Iteración ${iter}/${total} - Mejor Fitness: $${bestFitness.toFixed(2)}`)
+          }
+        }
+      )
 
       setProgress(100)
       const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1)
       addLog(`Optimizacion completada en ${elapsed}s`)
-      addLog(`Costo optimizado: $${data.fitness?.toFixed(2)} USD/ano`)
+      addLog(`Costo optimizado: $${data.optimizedCost?.toFixed(2)} USD/ano`)
       addLog(`Ahorro: ${data.savingsPercent?.toFixed(1)}%`)
       addLog(`Nodos optimos: ${data.optimalNodes?.join(", ")}`)
 

@@ -488,13 +488,13 @@ function fitnessFunction(
 /**
  * Algoritmo ICSA Principal
  */
-export function runICSA(
+export async function runICSA(
   network: NetworkData,
   loadProfile: HourlyLoadProfile,
   economics: EconomicParams,
   config: ICSAConfig,
   onProgress?: (iter: number, total: number, bestFitness: number) => void
-): ICSAResult {
+): Promise<ICSAResult> {
   const startTime = performance.now()
   const rng = new SeededRandom(config.seed)
 
@@ -532,6 +532,9 @@ export function runICSA(
     ...Array(config.numGDs * numHorasSol).fill(0) // Despachos = 0
   ]
   const baseResult = fitnessFunction(xBase, network, loadProfile, economics, config.numGDs, horasSolIdx, matrices)
+  
+  // Dar un respiro al hilo principal antes de empezar el loop pesado
+  await new Promise(resolve => setTimeout(resolve, 0))
   // Costo base = f1 del caso sin FV (que es el costo de energia comprada)
   // f2 y f3 son 0 porque no hay FV instalado
   // Usamos f1 directamente (no fitness) para evitar incluir penalizaciones de voltaje
@@ -647,6 +650,11 @@ export function runICSA(
 
     if (onProgress) {
       onProgress(iter + 1, config.maxIterations, globalBestFit)
+    }
+
+    // Cada 100 iteraciones, liberar el hilo para que la UI se actualice
+    if (iter % 100 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0))
     }
   }
 

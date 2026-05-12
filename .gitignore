@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+/node_modules_corrupted
 /.pnp
 .pnp.js
 
@@ -16,6 +17,7 @@
 # misc
 .DS_Store
 *.pem
+tsconfig.tsbuildinfo
 
 # debug
 npm-debug.log*
@@ -35,4 +37,3 @@ next-env.d.ts
 # large files
 *.mp4
 *.m
-# (Opcional: puedes quitar *.m si quieres subir los archivos de MATLAB)
